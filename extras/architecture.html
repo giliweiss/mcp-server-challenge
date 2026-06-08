@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fleet MCP Server - Data Flow</title>
+  <style>
+    :root {
+      --background: #0b1020;
+      --panel: #121a2e;
+      --panel-light: #18233d;
+      --border: #273653;
+      --text: #eef4ff;
+      --muted: #9aa8c7;
+      --blue: #4f8cff;
+      --green: #35c46f;
+      --orange: #f5a524;
+      --purple: #a78bfa;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(79, 140, 255, 0.18), transparent 34rem),
+        radial-gradient(circle at top right, rgba(53, 196, 111, 0.12), transparent 28rem),
+        var(--background);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 48px 24px 64px;
+    }
+
+    main {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 56px);
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      margin: 18px auto 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.6;
+    }
+
+    .section {
+      margin-top: 28px;
+      background: rgba(18, 26, 46, 0.86);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+      padding: 28px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.02em;
+    }
+
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 460px;
+    }
+
+    .diagram-overview {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(130px, 1fr));
+      gap: 30px;
+      align-items: stretch;
+      position: relative;
+    }
+
+    .diagram-step {
+      position: relative;
+      min-height: 132px;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .diagram-step::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: calc(100% + 6px);
+      width: 18px;
+      height: 18px;
+      border-top: 2px solid var(--blue);
+      border-right: 2px solid var(--blue);
+      transform: translateY(-50%) rotate(45deg);
+      opacity: 0.8;
+    }
+
+    .diagram-step:last-child::after {
+      display: none;
+    }
+
+    .diagram-step.client {
+      background: linear-gradient(135deg, rgba(79, 140, 255, 0.95), rgba(61, 104, 220, 0.72));
+      border-color: rgba(184, 215, 255, 0.45);
+    }
+
+    .diagram-step.validation {
+      border-color: rgba(53, 196, 111, 0.55);
+      background: rgba(53, 196, 111, 0.08);
+    }
+
+    .diagram-step.action {
+      border-color: rgba(245, 165, 36, 0.5);
+      background: rgba(245, 165, 36, 0.08);
+    }
+
+    .diagram-number {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      margin-bottom: 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .diagram-step h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      line-height: 1.25;
+    }
+
+    .diagram-step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .diagram-step.client p {
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .response-line {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .response-line::before,
+    .response-line::after {
+      content: "";
+      height: 1px;
+      flex: 1;
+      background: linear-gradient(90deg, transparent, rgba(79, 140, 255, 0.75), transparent);
+    }
+
+    code {
+      color: #b8d7ff;
+      font-family: "SF Mono", Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    .tools {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .tool {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--panel-light);
+      overflow: hidden;
+    }
+
+    .tool-title {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      color: #b8d7ff;
+      font-family: "SF Mono", Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    ol {
+      margin: 0;
+      padding: 18px 18px 18px 40px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    .file-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+
+    .file {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .file strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #b8d7ff;
+      font-family: "SF Mono", Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+    }
+
+    .file span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 13px;
+    }
+
+    .pill.blue { color: #b8d7ff; border-color: rgba(79, 140, 255, 0.45); }
+    .pill.green { color: #9bf0b8; border-color: rgba(53, 196, 111, 0.45); }
+    .pill.orange { color: #ffd38a; border-color: rgba(245, 165, 36, 0.45); }
+
+    @media (max-width: 960px) {
+      .diagram-overview,
+      .tools,
+      .file-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .diagram-step::after {
+        top: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%) rotate(135deg);
+      }
+
+      .section-header {
+        display: block;
+      }
+
+      .hint {
+        margin-top: 10px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 28px 14px 48px;
+      }
+
+      .section {
+        padding: 20px;
+        border-radius: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <h1>Fleet Management MCP Server</h1>
+      <p class="subtitle">A cleaner view of how Cursor talks to the MCP server, how requests move through validation and services, and what each tool returns.</p>
+      <div class="pill-row" aria-label="Legend">
+        <span class="pill blue">MCP boundary</span>
+        <span class="pill green">Validated device actions</span>
+        <span class="pill orange">Guarded reboot action</span>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>Clean Architecture Diagram</h2>
+        <p class="hint">A quick left-to-right view of the request path. The response comes back as compact JSON and is translated into a natural-language answer.</p>
+      </div>
+
+      <div class="diagram-overview" aria-label="Fleet MCP request flow diagram">
+        <article class="diagram-step client">
+          <div class="diagram-number">1</div>
+          <h3>User + AI Agent</h3>
+          <p>Cursor receives the prompt and chooses the MCP tool to call.</p>
+        </article>
+
+        <article class="diagram-step">
+          <div class="diagram-number">2</div>
+          <h3><code>main.py</code></h3>
+          <p>The project venv runs the MCP CLI and exposes the server app.</p>
+        </article>
+
+        <article class="diagram-step">
+          <div class="diagram-number">3</div>
+          <h3>FastMCP Server</h3>
+          <p>Registers one fleet resource and three fleet-management tools.</p>
+        </article>
+
+        <article class="diagram-step validation">
+          <div class="diagram-number">4</div>
+          <h3>Validation + Services</h3>
+          <p>Device IDs are checked before telemetry, anomaly, or reboot logic runs.</p>
+        </article>
+
+        <article class="diagram-step action">
+          <div class="diagram-number">5</div>
+          <h3>Fleet Data + Result</h3>
+          <p>Reads config and telemetry, then returns compact JSON to the model.</p>
+        </article>
+      </div>
+
+      <div class="response-line">JSON response flows back to Cursor as a user-friendly answer</div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>Tool-by-Tool Flow</h2>
+        <p class="hint">Each tool keeps the context small by returning only the data the model needs.</p>
+      </div>
+
+      <div class="tools">
+        <article class="tool">
+          <div class="tool-title">get_device_telemetry(device_id)</div>
+          <ol>
+            <li>AI calls the tool with a device ID.</li>
+            <li>Device ID is validated by format and allowlist.</li>
+            <li>Telemetry service reads the latest device snapshot.</li>
+            <li>Returns voltage, current, temperature, and power.</li>
+          </ol>
+        </article>
+
+        <article class="tool">
+          <div class="tool-title">calculate_efficiency_anomalies()</div>
+          <ol>
+            <li>AI calls the fleet-wide anomaly tool.</li>
+            <li>Anomaly service reads 48 readings per device.</li>
+            <li>Compares recent and historical power averages.</li>
+            <li>Returns a summary plus the top anomalous devices.</li>
+          </ol>
+        </article>
+
+        <article class="tool">
+          <div class="tool-title">reboot_device(device_id)</div>
+          <ol>
+            <li>AI calls the tool with a device ID.</li>
+            <li>Device ID is validated before action.</li>
+            <li>Reboot service checks anomaly status and cooldown.</li>
+            <li>Returns either command sent or a structured rejection.</li>
+          </ol>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>Key Files</h2>
+        <p class="hint">The implementation is intentionally small: one MCP registration layer, three service modules, and in-memory data.</p>
+      </div>
+
+      <div class="file-grid">
+        <article class="file">
+          <strong>mcp-config.json / .cursor/mcp.json</strong>
+          <span>Starts the project virtual environment MCP CLI with <code>run main.py</code>.</span>
+        </article>
+        <article class="file">
+          <strong>fleet_management_server.py</strong>
+          <span>Registers <code>devices://fleet-config</code> and the three MCP tools.</span>
+        </article>
+        <article class="file">
+          <strong>device_validator.py</strong>
+          <span>Protects all device-specific tools with strict input validation.</span>
+        </article>
+        <article class="file">
+          <strong>services/</strong>
+          <span>Contains telemetry lookup, anomaly calculation, and reboot guardrails.</span>
+        </article>
+        <article class="file">
+          <strong>fleet_data.py</strong>
+          <span>Loads config and builds deterministic telemetry history for tests and demos.</span>
+        </article>
+        <article class="file">
+          <strong>tests/</strong>
+          <span>Covers service behavior plus MCP protocol registration and tool calls.</span>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

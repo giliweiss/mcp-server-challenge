@@ -30,7 +30,10 @@ mcp-server-challenge/
 ├── mcp-config.json                      ← Cursor / Claude Desktop connection config
 ├── pyproject.toml                       ← Project dependencies (used by uv)
 ├── uv.lock                              ← Locked dependency versions
-└── answers.md                           ← Deep-dive question answers
+├── answers.md                           ← Deep-dive question answers
+├── AGENT.md                             ← Agent guidelines for working with this codebase
+├── extras/                              ← Architecture diagram and supplementary docs
+└── integration/                         ← Part C evidence (log + screenshots/)
 ```
 
 ---
@@ -164,6 +167,27 @@ The server will appear as `fleet-management` in the tool list.
 
 ---
 
+## Example Model Response
+
+After calling `calculate_efficiency_anomalies`, the model presented the results to the user in plain language (not raw JSON):
+
+**User prompt:**
+
+> Check the fleet for efficiency anomalies and tell me which devices need attention.
+
+**Model response:**
+
+> Two of five devices are consuming significantly more power than their 24-hour historical baseline:
+>
+> 1. **DEV-004 (Heat Exchanger D)** — worst offender at **+101%** power increase (Plant 2 - Zone B). Priority investigation.
+> 2. **DEV-002 (Pump Station B)** — **+81.8%** increase (Plant 1 - Zone B). Secondary concern.
+>
+> The other three devices are within normal parameters. I recommend pulling live telemetry for DEV-004 before deciding on remediation.
+
+Full integration test details: [`integration/integration-log.md`](integration/integration-log.md)
+
+---
+
 ## Testing
 
 ```bash
@@ -217,3 +241,15 @@ This keeps token usage minimal and prevents context window overflow when the fle
 - **Anomaly pre-condition** — reboot is rejected if the device is not flagged by `calculate_efficiency_anomalies`
 - **Per-device cooldown** — enforced using `reboot_cooldown_seconds` from `fleet_config.json` (default: 5 minutes)
 - **Structured rejection** — returns `reboot_rejected` with a reason instead of executing the command
+
+---
+
+## Part C: LLM Integration Test
+
+Fully documented in [`integration/integration-log.md`](integration/integration-log.md) with screenshots in `integration/screenshots/`.
+
+The log covers the three required observations:
+
+1. **Tool discovery** — how the model sees `get_device_telemetry`, `calculate_efficiency_anomalies`, `reboot_device`, and `devices://fleet-config`
+2. **Tool selection** — when the model chooses `calculate_efficiency_anomalies` (fleet-wide anomaly/efficiency questions) vs other tools
+3. **Insight presentation** — how the model translates structured tool output into plain-language recommendations for the user
