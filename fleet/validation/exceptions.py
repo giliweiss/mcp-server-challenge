@@ -1,0 +1,2 @@
+class InvalidDeviceIdError(ValueError):
+    pass

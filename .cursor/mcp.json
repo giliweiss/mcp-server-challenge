@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "fleet-management": {
+      "command": "${workspaceFolder}/.venv/Scripts/mcp.exe",
+      "args": ["run", "main.py"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}

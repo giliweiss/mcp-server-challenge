@@ -1,0 +1,14 @@
+{
+  "fleet_name": "Alpha Industrial Fleet",
+  "version": "2.1.0",
+  "region": "EU-West",
+  "monitoring_interval_seconds": 3600,
+  "reboot_cooldown_seconds": 300,
+  "devices": [
+    {"device_id": "DEV-001", "name": "Turbine Controller A", "location": "Plant 1 - Zone A"},
+    {"device_id": "DEV-002", "name": "Pump Station B", "location": "Plant 1 - Zone B"},
+    {"device_id": "DEV-003", "name": "Compressor Unit C", "location": "Plant 2 - Zone A"},
+    {"device_id": "DEV-004", "name": "Heat Exchanger D", "location": "Plant 2 - Zone B"},
+    {"device_id": "DEV-005", "name": "Conveyor Motor E", "location": "Plant 3 - Zone A"}
+  ]
+}
