@@ -29,7 +29,8 @@ mcp-server-challenge/
 │   └── test_part_a_mcp.py               ← MCP protocol tests (list_tools, call_tool, read_resource)
 ├── mcp-config.json                      ← Cursor / Claude Desktop connection config
 ├── pyproject.toml                       ← Project dependencies (used by uv)
-└── uv.lock                              ← Locked dependency versions
+├── uv.lock                              ← Locked dependency versions
+└── answers.md                           ← Deep-dive question answers
 ```
 
 ---
@@ -180,3 +181,39 @@ uv run pytest tests/test_fleet_management.py -v
 |---|---|
 | `test_fleet_management.py` | Services, validation, tool handlers, reboot guardrails |
 | `test_part_a_mcp.py` | MCP registration, `read_resource`, `call_tool` end-to-end |
+
+---
+
+## Part B: Security and Optimization
+
+### Input Validation (Tool Safety)
+
+All `device_id` inputs are validated in `fleet/validation/device_validator.py` before reaching any business logic:
+
+- Type check — must be a string
+- Length check — max 20 characters (prevents buffer-style abuse)
+- Format check — strict regex `DEV-\d{3}` (rejects SQL fragments, path traversal, script injections)
+- Existence check — must be a known device ID from `fleet_config.json`
+- Safe error messages — invalid input is rejected without echoing the raw value back to the LLM
+
+Any invalid input returns a structured `{"error": "..."}` response instead of raising an unhandled exception.
+
+Data is currently in-memory (no SQL), so injection protection is enforced at the input-validation layer. In production with a real database, the same validated IDs would be passed via parameterized queries.
+
+### Context Optimization
+
+Instead of returning all 48 raw telemetry rows per device, the tools return only what the LLM needs:
+
+- `get_device_telemetry` returns a **single aggregated snapshot** (the latest reading + computed power)
+- `calculate_efficiency_anomalies` runs the comparison server-side and returns a **summary line** plus capped anomaly details (top 5 by severity), not raw readings
+- `devices://fleet-config` returns **compact JSON** (no pretty-printing) to reduce whitespace tokens
+
+This keeps token usage minimal and prevents context window overflow when the fleet scales.
+
+### Reboot Guardrails (Dangerous Action Protection)
+
+`reboot_device` has additional checks beyond input validation:
+
+- **Anomaly pre-condition** — reboot is rejected if the device is not flagged by `calculate_efficiency_anomalies`
+- **Per-device cooldown** — enforced using `reboot_cooldown_seconds` from `fleet_config.json` (default: 5 minutes)
+- **Structured rejection** — returns `reboot_rejected` with a reason instead of executing the command
